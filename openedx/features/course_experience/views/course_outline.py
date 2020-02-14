@@ -10,6 +10,7 @@ from completion import waffle as completion_waffle
 from django.contrib.auth.models import User
 from django.template.context_processors import csrf
 from django.template.loader import render_to_string
+from django.urls import reverse
 import edx_when.api as edx_when_api
 from opaque_keys.edx.keys import CourseKey
 from pytz import UTC
@@ -18,6 +19,7 @@ from web_fragments.fragment import Fragment
 
 from lms.djangoapps.courseware.courses import get_course_overview_with_access
 from openedx.core.djangoapps.plugin_api.views import EdxFragmentView
+from six import text_type
 from student.models import CourseEnrollment
 from util.milestones_helpers import get_course_content_milestones
 from xmodule.course_module import COURSE_VISIBILITY_PUBLIC
@@ -48,13 +50,20 @@ class CourseOutlineFragmentView(EdxFragmentView):
         )
         if not course_block_tree:
             return None
+        print('************', course.id);
+        reset_deadlines_url = reverse(
+            'openedx.course_experience.reset_course_deadlines', kwargs={'course_id': text_type(course.id)}
+        )
+        print('*************', reset_deadlines_url)
 
         context = {
+            'hello': 'hsdkjfchdkjfhs',
             'csrf': csrf(request)['csrf_token'],
             'course': course_overview,
             'due_date_display_format': course.due_date_display_format,
             'blocks': course_block_tree,
             'enable_links': user_is_enrolled or course.course_visibility == COURSE_VISIBILITY_PUBLIC,
+            'reset_deadlines_url': reset_deadlines_url,
         }
 
         resume_block = get_resume_block(course_block_tree) if user_is_enrolled else None

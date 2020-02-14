@@ -1,0 +1,22 @@
+div.reset-deadlines-banner-wrapper {
+    div.reset-deadlines-banner {
+      background-color: theme-color("primary");
+      display: flex;
+      flex-wrap: wrap;
+      padding: 15px;
+      margin-top: 5px;
+
+      div, button {
+        flex: 0 0 auto;
+
+        &.reset-deadlines-text {
+          color: theme-color("inverse");
+          padding-top: 2px;
+        }
+
+        &.reset-deadlines-button {
+          margin-left: 10px;
+        }
+      }
+    }
+}

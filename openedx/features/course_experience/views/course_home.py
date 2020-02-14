@@ -3,8 +3,11 @@ Views for the course home page.
 """
 
 
+import pytz
 import six
+from datetime import datetime
 from django.conf import settings
+from django.shortcuts import redirect
 from django.template.context_processors import csrf
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -248,3 +251,16 @@ class CourseHomeFragmentView(EdxFragmentView):
         }
         html = render_to_string('course_experience/course-home-fragment.html', context)
         return Fragment(html)
+
+
+@ensure_csrf_cookie
+def reset_course_deadlines(request, course_id):
+    """
+    Set the start_date of a schedule to today, which in turn will adjust due dates for
+    sequentials belonging to a self paced course
+    """
+    enrollment = CourseEnrollment.objects.get(user=request.user, course=course_id)
+    schedule = enrollment.schedule
+    schedule.start_date = datetime.now(pytz.utc)
+    schedule.save()
+    return redirect(reverse('openedx.course_experience.course_home', args=[six.text_type(course_id)]))
