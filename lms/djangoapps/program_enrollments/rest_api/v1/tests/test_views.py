@@ -10,9 +10,11 @@ from uuid import UUID, uuid4
 
 import ddt
 import mock
+import pytest
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.cache import cache
+from django.db import IntegrityError
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -1203,20 +1205,15 @@ class ProgramCourseEnrollmentsPatchTests(ProgramCourseEnrollmentsModifyMixin, AP
         self.create_program_and_course_enrollments('learner-4', course_status=initial_statuses[3], user=None)
 
 
+@ddt.ddt
 class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
     @classmethod
     def setUpClass(cls):
         super(MultiprogramEnrollmentsTest, cls).setUpClass()
-        another_catalog_course_id_str = 'course-v1:edx+fakeX'
-        course_run_id_str = '{}+Toy_Course'.format(another_catalog_course_id_str)
-        cls.another_course_id = CourseKey.from_string(course_run_id_str)
-        CourseOverviewFactory(id=cls.another_course_id)
-        another_course_run = CourseRunFactory(key=cls.another_course_id)
-        cls.another_course = CourseFactory(key=another_catalog_course_id_str, course_runs=[another_course_run])
         cls.another_curriculum_uuid = UUID('bbbbbbbb-8888-9999-7777-666666666666')
         cls.another_curriculum = CurriculumFactory(
             uuid=cls.another_curriculum_uuid,
-            courses=[cls.course, cls.another_course]
+            courses=[cls.course]
         )
         cls.another_program_uuid = UUID(cls.program_uuid_tmpl.format(99))
         cls.another_program = ProgramFactory(
@@ -1224,24 +1221,13 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
             authoring_organizations=[cls.catalog_org],
             curricula=[cls.another_curriculum]
         )
+        cls.external_user_key = 'aabbcc'
+        cls.user = User.objects.create_user('test_ta_user', 'testta@example.com', 'password')
 
     def setUp(self):
         super(MultiprogramEnrollmentsTest, self).setUp()
         self.set_program_in_catalog_cache(self.another_program_uuid, self.another_program)
         self.client.login(username=self.global_staff.username, password=self.password)
-
-    def program_enrollment_json(self, external_user_key, status, curriculum_uuid):
-        return [{
-            'status': status,
-            REQUEST_STUDENT_KEY: external_user_key,
-            'curriculum_uuid': str(curriculum_uuid)
-        }]
-    
-    def program_course_enrollment_json(self, external_user_key, status):
-        return [{
-            'student_key': external_user_key,
-            'status': status
-        }]
 
     def get_program_url(self, program_uuid):
         return reverse('programs_api:v1:program_enrollments', kwargs={
@@ -1254,95 +1240,89 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
             'course_id': course_id
         })
 
-    def test_enrollment_in_same_course_multi_program_non_existing_user(self):
-        post_data = self.program_enrollment_json('aabbcc', 'enrolled', self.curriculum_uuid)
-        another_post_data = self.program_enrollment_json('aabbcc', 'enrolled', self.another_curriculum_uuid)
-        url = self.get_program_url(program_uuid=self.program_uuid)
-        with _patch_get_users:
-            response = self.client.post(url, json.dumps(post_data), content_type='application/json')
-        self.assertEqual(response.status_code, 200)
+    def write_program_enrollment(self, method, program_uuid, curriculum_uuid, status, existing_user):
+        write_data = [{
+            'status': status,
+            REQUEST_STUDENT_KEY: self.external_user_key,
+            'curriculum_uuid': str(curriculum_uuid)
+        }]
+        url = self.get_program_url(program_uuid=program_uuid)
+        mock_user = defaultdict(lambda: None)
+        if existing_user:
+            mock_user = {self.external_user_key: self.user}
+        with mock.patch(
+            _get_users_patch_path,
+            autospec=True,
+            return_value=mock_user,
+        ):
+            response = getattr(self.client, method)(url, json.dumps(write_data), content_type='application/json')
+            return response
 
-        course_post_data = self.program_course_enrollment_json('aabbcc', 'active')
-        course_url = self.get_program_course_url(self.program_uuid, self.course_id)
-        response = self.client.post(course_url, json.dumps(course_post_data), content_type='application/json')
-        assert status.HTTP_200_OK == response.status_code
+    def write_program_course_enrollment(self, method, program_uuid, course_id, status):
+        course_post_data = [{
+            'student_key': self.external_user_key,
+            'status': status
+        }]
+        course_url = self.get_program_course_url(program_uuid, course_id)
+        response = getattr(self.client, method)(course_url, json.dumps(course_post_data), content_type='application/json')
+        return response
 
-        patch_data = self.program_enrollment_json('aabbcc', 'canceled', self.curriculum_uuid)
-        response = self.client.patch(url, json.dumps(patch_data), content_type='application/json')
-        self.assertEqual(response.status_code, 200)
-
-        course_patch_data = self.program_course_enrollment_json('aabbcc', 'inactive')
-        response = self.client.patch(course_url, json.dumps(course_patch_data), content_type='application/json')
-        self.assertEqual(response.status_code, 200)
-
-        url = self.get_program_url(program_uuid=self.another_program_uuid)
-        with _patch_get_users:
-            response = self.client.post(url, json.dumps(another_post_data), content_type='application/json')
-        self.assertEqual(response.status_code, 200)
-
-        another_course_url = self.get_program_course_url(self.another_program_uuid, self.course_id)
-        response = self.client.post(another_course_url, json.dumps(course_post_data), content_type='application/json')
-        assert status.HTTP_200_OK == response.status_code
-
-        self.provider = SAMLProviderConfigFactory(
-            organization=self.lms_org,
-            slug=self.organization_key
-        )
-
-        user = User.objects.create_user('test_ta_user', 'testta@example.com', 'password')
+    def link_user_social_auth(self):
+        SAMLProviderConfigFactory(
+                organization=self.lms_org,
+                slug=self.organization_key
+            )
         UserSocialAuth.objects.create(
-            user=user,
-            uid='{0}:{1}'.format(self.organization_key, 'aabbcc'),
+            user=self.user,
+            uid='{0}:{1}'.format(self.organization_key, self.external_user_key),
             provider=self.organization_key
         )
 
-        program_course_enrollment = ProgramCourseEnrollment.objects.get(
-            program_enrollment__external_user_key = 'aabbcc',
-            program_enrollment__program_uuid = self.another_program_uuid
-        )
-        self.assertIsNotNone(program_course_enrollment.program_enrollment.user)
+    @ddt.data(True, False)
+    def test_enrollment_in_same_course_multi_program(self, existing_user):
+        response = self.write_program_enrollment('post', self.program_uuid, self.curriculum_uuid, 'enrolled', existing_user)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = self.write_program_course_enrollment('post', self.program_uuid, self.course_id, 'active')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_enrollment_in_same_course_multi_program_existing_user(self):
-        user = User.objects.create_user('test_ta_user', 'testta@example.com', 'password')
+        response = self.write_program_enrollment('put', self.program_uuid, self.curriculum_uuid, 'canceled', existing_user)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = self.write_program_course_enrollment('put', self.program_uuid, self.course_id, 'inactive')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        post_data = self.program_enrollment_json('aabbcc', 'enrolled', self.curriculum_uuid)
-        another_post_data = self.program_enrollment_json('aabbcc', 'enrolled', self.another_curriculum_uuid)
-        url = self.get_program_url(program_uuid=self.program_uuid)
-        with mock.patch(
-            _get_users_patch_path,
-            autospec=True,
-            return_value={'aabbcc': user},
-        ):
-            response = self.client.post(url, json.dumps(post_data), content_type='application/json')
-        self.assertEqual(response.status_code, 200)
+        response = self.write_program_enrollment('post', self.another_program_uuid, self.another_curriculum_uuid, 'enrolled', existing_user)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = self.write_program_course_enrollment('post', self.another_program_uuid, self.course_id, 'active')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        course_post_data = self.program_course_enrollment_json('aabbcc', 'active')
-        course_url = self.get_program_course_url(self.program_uuid, self.course_id)
-        response = self.client.post(course_url, json.dumps(course_post_data), content_type='application/json')
-        assert status.HTTP_200_OK == response.status_code
-
-        patch_data = self.program_enrollment_json('aabbcc', 'canceled', self.curriculum_uuid)
-        response = self.client.patch(url, json.dumps(patch_data), content_type='application/json')
-        self.assertEqual(response.status_code, 200)
-
-        course_patch_data = self.program_course_enrollment_json('aabbcc', 'inactive')
-        response = self.client.patch(course_url, json.dumps(course_patch_data), content_type='application/json')
-        self.assertEqual(response.status_code, 200)
-
-        url = self.get_program_url(program_uuid=self.another_program_uuid)
-        with mock.patch(
-            _get_users_patch_path,
-            autospec=True,
-            return_value={'aabbcc': user},
-        ):
-            response = self.client.post(url, json.dumps(another_post_data), content_type='application/json')
-        self.assertEqual(response.status_code, 200)
-
-        another_course_url = self.get_program_course_url(self.another_program_uuid, self.course_id)
-        response = self.client.post(another_course_url, json.dumps(course_post_data), content_type='application/json')
-        assert status.HTTP_200_OK == response.status_code
+        if not existing_user:
+            self.link_user_social_auth()
+            program_course_enrollment = ProgramCourseEnrollment.objects.get(
+                program_enrollment__external_user_key = self.external_user_key,
+                program_enrollment__program_uuid = self.another_program_uuid
+            )
+            self.assertIsNotNone(program_course_enrollment.program_enrollment.user)
 
 
+    @ddt.data(True, False)
+    def test_enrollment_in_same_course_both_program_enrollments_active(self, existing_user):
+        response = self.write_program_enrollment('post', self.program_uuid, self.curriculum_uuid, 'enrolled', existing_user)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response = self.write_program_course_enrollment('post', self.program_uuid, self.course_id, 'active')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        response = self.write_program_enrollment('post', self.another_program_uuid, self.another_curriculum_uuid, 'enrolled', existing_user)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        if existing_user:
+            with pytest.raises(IntegrityError) as integrity_exception:
+                response = self.write_program_course_enrollment('post', self.another_program_uuid, self.course_id, 'active')
+            assert 'UNIQUE constraint failed' in str(integrity_exception.value)
+        else:
+            response = self.write_program_course_enrollment('post', self.another_program_uuid, self.course_id, 'active')
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            with pytest.raises(IntegrityError) as integrity_exception:
+                self.link_user_social_auth()
+            assert 'UNIQUE constraint failed' in str(integrity_exception.value)
 
 class ProgramCourseEnrollmentsPutTests(ProgramCourseEnrollmentsModifyMixin, APITestCase):
     """ Tests for course enrollment PUT """
