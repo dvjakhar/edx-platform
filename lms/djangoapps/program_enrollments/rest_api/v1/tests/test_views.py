@@ -46,6 +46,7 @@ from openedx.core.djangoapps.catalog.tests.factories import (
 from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
 from openedx.core.djangoapps.content.course_overviews.tests.factories import CourseOverviewFactory
 from openedx.core.djangolib.testing.utils import CacheIsolationMixin
+from social_django.models import UserSocialAuth
 from student.roles import CourseStaffRole
 from student.tests.factories import CourseEnrollmentFactory, UserFactory
 from third_party_auth.tests.factories import SAMLProviderConfigFactory
@@ -99,7 +100,7 @@ class EnrollmentsDataMixin(ProgramCacheMixin):
         cls.start_cache_isolation()
         cls.organization_key = "testorg"
         cls.catalog_org = OrganizationFactory(key=cls.organization_key)
-        LMSOrganizationFactory(short_name=cls.organization_key)
+        cls.lms_org = LMSOrganizationFactory(short_name=cls.organization_key)
         cls.program_uuid = UUID('00000000-1111-2222-3333-444444444444')
         cls.program_uuid_tmpl = '00000000-1111-2222-3333-4444444444{0:02d}'
         cls.curriculum_uuid = UUID('aaaaaaaa-1111-2222-3333-444444444444')
@@ -1266,6 +1267,10 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
         response = self.client.post(course_url, json.dumps(course_post_data), content_type='application/json')
         assert status.HTTP_200_OK == response.status_code
 
+        patch_data = self.program_enrollment_json('aabbcc', 'canceled', self.curriculum_uuid)
+        response = self.client.patch(url, json.dumps(patch_data), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+
         url = self.get_program_url(program_uuid=self.another_program_uuid)
         with _patch_get_users:
             response = self.client.post(url, json.dumps(another_post_data), content_type='application/json')
@@ -1275,6 +1280,23 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
         response = self.client.post(another_course_url, json.dumps(course_post_data), content_type='application/json')
         assert status.HTTP_200_OK == response.status_code
 
+        self.provider = SAMLProviderConfigFactory(
+            organization=self.lms_org,
+            slug=self.organization_key
+        )
+
+        user = User.objects.create_user('test_ta_user', 'testta@example.com', 'password')
+        UserSocialAuth.objects.create(
+            user=user,
+            uid='{0}:{1}'.format(self.organization_key, 'aabbcc'),
+            provider=self.organization_key
+        )
+
+        program_course_enrollment = ProgramCourseEnrollment.objects.get(
+            program_enrollment__external_user_key = 'aabbcc',
+            program_enrollment__program_uuid = self.another_program_uuid
+        )
+        self.assertIsNotNone(program_course_enrollment.program_enrollment.user)
 
     def test_enrollment_in_same_course_multi_program_existing_user(self):
         user = User.objects.create_user('test_ta_user', 'testta@example.com', 'password')
@@ -1294,6 +1316,10 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
         course_url = self.get_program_course_url(self.program_uuid, self.course_id)
         response = self.client.post(course_url, json.dumps(course_post_data), content_type='application/json')
         assert status.HTTP_200_OK == response.status_code
+
+        patch_data = self.program_enrollment_json('aabbcc', 'canceled', self.curriculum_uuid)
+        response = self.client.patch(url, json.dumps(patch_data), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
 
         url = self.get_program_url(program_uuid=self.another_program_uuid)
         with mock.patch(
