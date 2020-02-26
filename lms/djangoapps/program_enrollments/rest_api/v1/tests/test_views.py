@@ -1271,6 +1271,10 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
         response = self.client.patch(url, json.dumps(patch_data), content_type='application/json')
         self.assertEqual(response.status_code, 200)
 
+        course_patch_data = self.program_course_enrollment_json('aabbcc', 'inactive')
+        response = self.client.patch(course_url, json.dumps(course_patch_data), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+
         url = self.get_program_url(program_uuid=self.another_program_uuid)
         with _patch_get_users:
             response = self.client.post(url, json.dumps(another_post_data), content_type='application/json')
@@ -1319,6 +1323,10 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
 
         patch_data = self.program_enrollment_json('aabbcc', 'canceled', self.curriculum_uuid)
         response = self.client.patch(url, json.dumps(patch_data), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+
+        course_patch_data = self.program_course_enrollment_json('aabbcc', 'inactive')
+        response = self.client.patch(course_url, json.dumps(course_patch_data), content_type='application/json')
         self.assertEqual(response.status_code, 200)
 
         url = self.get_program_url(program_uuid=self.another_program_uuid)
