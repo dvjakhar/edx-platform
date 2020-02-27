@@ -46,6 +46,8 @@ from lms.djangoapps.grades.subsection_grade import CreateSubsectionGrade
 from lms.djangoapps.grades.subsection_grade_factory import SubsectionGradeFactory
 from lms.djangoapps.grades.tasks import recalculate_subsection_grade_v3
 from lms.djangoapps.course_blocks.api import get_course_blocks
+from lms.djangoapps.program_enrollments.constants import ProgramCourseEnrollmentStatuses
+from lms.djangoapps.program_enrollments.models import ProgramCourseEnrollment
 from openedx.core.djangoapps.course_groups import cohorts
 from openedx.core.djangoapps.util.forms import to_bool
 from openedx.core.lib.api.view_utils import (
@@ -506,7 +508,19 @@ class GradebookView(GradeViewMixin, PaginatedAPIView):
 
     @staticmethod
     def _get_external_user_key(user, course_id):
-        program_enrollment = CourseEnrollment.get_program_enrollment(user, course_id)
+        program_course_enrollments = ProgramCourseEnrollment.objects.filter(
+            course_enrollment__user=user,
+            course_key=course_id
+        )
+
+        if len(program_course_enrollments) == 0:
+            return None
+
+        program_enrollment = program_course_enrollments.first().program_enrollment
+        for program_course_enrollment in program_course_enrollments:
+            if program_course_enrollment.status == ProgramCourseEnrollmentStatuses.ACTIVE:
+                program_enrollment = program_course_enrollment.program_enrollment
+
         return getattr(program_enrollment, 'external_user_key', None)
 
     @verify_course_exists

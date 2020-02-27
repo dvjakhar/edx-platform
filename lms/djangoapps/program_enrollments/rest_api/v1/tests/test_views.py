@@ -1271,9 +1271,9 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
 
     def write_program_course_enrollment(
         self,
-        method, 
+        method,
         program_uuid,
-        course_id, 
+        course_id,
         enrollment_status
     ):
         """ Create or update the program course enrollment through API """
