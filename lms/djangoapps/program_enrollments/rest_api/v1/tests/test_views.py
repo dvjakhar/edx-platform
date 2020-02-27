@@ -1267,9 +1267,9 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
 
     def link_user_social_auth(self):
         SAMLProviderConfigFactory(
-                organization=self.lms_org,
-                slug=self.organization_key
-            )
+            organization=self.lms_org,
+            slug=self.organization_key
+        )
         UserSocialAuth.objects.create(
             user=self.user,
             uid='{0}:{1}'.format(self.organization_key, self.external_user_key),
@@ -1296,11 +1296,10 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
         if not existing_user:
             self.link_user_social_auth()
             program_course_enrollment = ProgramCourseEnrollment.objects.get(
-                program_enrollment__external_user_key = self.external_user_key,
-                program_enrollment__program_uuid = self.another_program_uuid
+                program_enrollment__external_user_key=self.external_user_key,
+                program_enrollment__program_uuid=self.another_program_uuid
             )
             self.assertIsNotNone(program_course_enrollment.program_enrollment.user)
-
 
     @ddt.data(True, False)
     @mock.patch('lms.djangoapps.program_enrollments.api.writing.logger')
@@ -1322,6 +1321,9 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
                 self.external_user_key
             )
         )
+        expected_results = {self.external_user_key: CourseStatuses.DUPLICATED}
+        self.assertDictEqual(expected_results, response.data)
+
 
 class ProgramCourseEnrollmentsPutTests(ProgramCourseEnrollmentsModifyMixin, APITestCase):
     """ Tests for course enrollment PUT """

@@ -224,7 +224,7 @@ def write_program_course_enrollments(
     existing_course_enrollments_of_program_enrollment = existing_course_enrollments.filter(
         program_enrollment__program_uuid=program_uuid
     )
-  
+
     existing_course_enrollments_by_key = {key: None for key in external_keys}
     existing_course_enrollments_by_key.update({
         enrollment.program_enrollment.external_user_key: enrollment
@@ -479,7 +479,7 @@ def _process_duplicated_course_enrollments(
         if enrollment_status and \
             enrollment_status == ProgramCourseEnrollmentStatuses.ACTIVE and \
             course_enrollment.status == ProgramCourseEnrollmentStatuses.ACTIVE and \
-            course_enrollment.program_enrollment.program_uuid != program_uuid:
+                course_enrollment.program_enrollment.program_uuid != program_uuid:
             logger.error(
                 u'Detected duplicated active ProgramCourseEnrollment. This is happening on'
                 u' The program_uuid [{}] with course_key [{}] for external_user_key [{}]'.format(
