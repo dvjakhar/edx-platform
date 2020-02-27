@@ -198,6 +198,15 @@ def write_program_course_enrollments(
         raise ValueError("At least one of (create, update) must be True")
     requests_by_key, duplicated_keys = _organize_requests_by_external_key(enrollment_requests)
     external_keys = set(requests_by_key)
+
+    results = {}
+    results.update({
+        key: ProgramCourseOpStatuses.DUPLICATED for key in duplicated_keys
+    })
+
+    if not external_keys:
+        return results
+
     program_enrollments = fetch_program_enrollments(
         program_uuid=program_uuid,
         external_user_keys=external_keys,
@@ -212,11 +221,13 @@ def write_program_course_enrollments(
         course_keys=[course_key],
     ).select_related('program_enrollment')
 
-    results = _process_conflicted_course_enrollments(
-        requests_by_key,
-        existing_course_enrollments,
-        program_uuid,
-        course_key
+    results.update(
+        _process_conflicted_course_enrollments(
+            requests_by_key,
+            existing_course_enrollments,
+            program_uuid,
+            course_key
+        )
     )
 
     # Now, limit the course enrollments to the same program uuid
@@ -268,9 +279,6 @@ def write_program_course_enrollments(
     if to_save:
         ProgramCourseEnrollment.objects.bulk_create(to_save)
 
-    results.update({
-        key: ProgramCourseOpStatuses.DUPLICATED for key in duplicated_keys
-    })
     return results
 
 

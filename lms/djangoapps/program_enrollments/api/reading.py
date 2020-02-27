@@ -27,6 +27,9 @@ _STUDENT_ARG_ERROR_MESSAGE = (
 _REALIZED_FILTER_ERROR_TEMPLATE = (
     "{} and {} are mutually exclusive; at most one of them may be passed in as True."
 )
+_STUDENT_LIST_ARG_ERROR_MESSAGE = (
+    "user list and external_user_key_list are both empty or None; At list one of the list must be provided."
+)
 
 
 def get_program_enrollment(
@@ -298,6 +301,9 @@ def fetch_program_course_enrollments_by_students(
 
     Returns: queryset[ProgramCourseEnrollment]
     """
+    if not (users or external_user_keys):
+        raise ValueError(_STUDENT_LIST_ARG_ERROR_MESSAGE)
+
     if active_only and inactive_only:
         raise ValueError(
             _REALIZED_FILTER_ERROR_TEMPLATE.format("active_only", "inactive_only")
