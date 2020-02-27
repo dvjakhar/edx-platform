@@ -1358,14 +1358,14 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
         )
         self.assertEqual(response.status_code, 422)
         mock_log.error.assert_called_with(
-            u'Detected duplicated active ProgramCourseEnrollment. This is happening on'
+            u'Detected conflict active ProgramCourseEnrollment. This is happening on'
             u' The program_uuid [{}] with course_key [{}] for external_user_key [{}]'.format(
                 self.another_program_uuid,
                 self.course_id,
                 self.external_user_key
             )
         )
-        expected_results = {self.external_user_key: CourseStatuses.DUPLICATED}
+        expected_results = {self.external_user_key: CourseStatuses.CONFLICT}
         self.assertDictEqual(expected_results, response.data)
 
 

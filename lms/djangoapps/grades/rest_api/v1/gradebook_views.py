@@ -513,7 +513,7 @@ class GradebookView(GradeViewMixin, PaginatedAPIView):
             course_key=course_id
         )
 
-        if len(program_course_enrollments) == 0:
+        if not program_course_enrollments:
             return None
 
         program_enrollment = program_course_enrollments.first().program_enrollment

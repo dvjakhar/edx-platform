@@ -212,7 +212,7 @@ def write_program_course_enrollments(
         course_keys=[course_key],
     ).select_related('program_enrollment')
 
-    results = _process_duplicated_course_enrollments(
+    results = _process_conflicted_course_enrollments(
         requests_by_key,
         existing_course_enrollments,
         program_uuid,
@@ -443,7 +443,7 @@ def _organize_requests_by_external_key(enrollment_requests):
     return requests_by_key, duplicated_keys
 
 
-def _process_duplicated_course_enrollments(
+def _process_conflicted_course_enrollments(
     requests_by_key,
     existing_course_enrollments,
     program_uuid,
@@ -452,7 +452,7 @@ def _process_duplicated_course_enrollments(
     """
     Process the list of existing course enrollments together with
     the enrollment request list stored in 'requests_by_key'. Detect
-    whether we have duplicated ACTIVE ProgramCourseEnrollment entries.
+    whether we have conflicted ACTIVE ProgramCourseEnrollment entries.
     When detected, log about it and set that update or create entry to
     have duplicated status.
 
@@ -463,13 +463,14 @@ def _process_duplicated_course_enrollments(
         course_key (str)
 
     Returns:
-        results (dict) with detected duplicated entry, or empty dict.
+        results (dict) with detected conflict entry, or empty dict.
     """
     results = {}
-    # At this point, we want to detect potential duplication of program course enrollments
+
     course_enrollment_statuses_by_user_key = {
         key: request.get('status') for key, request in requests_by_key.items()
     }
+
     for course_enrollment in existing_course_enrollments:
         external_user_key = course_enrollment.program_enrollment.external_user_key
         enrollment_status = course_enrollment_statuses_by_user_key.get(
@@ -478,14 +479,14 @@ def _process_duplicated_course_enrollments(
         if enrollment_status and \
             enrollment_status == ProgramCourseEnrollmentStatuses.ACTIVE and \
             course_enrollment.status == ProgramCourseEnrollmentStatuses.ACTIVE and \
-                course_enrollment.program_enrollment.program_uuid != program_uuid:
+                str(course_enrollment.program_enrollment.program_uuid) != str(program_uuid):
             logger.error(
-                u'Detected duplicated active ProgramCourseEnrollment. This is happening on'
+                u'Detected conflict active ProgramCourseEnrollment. This is happening on'
                 u' The program_uuid [{}] with course_key [{}] for external_user_key [{}]'.format(
                     program_uuid,
                     course_key,
                     external_user_key
                 ))
-            results[external_user_key] = ProgramCourseOpStatuses.DUPLICATED
+            results[external_user_key] = ProgramCourseOpStatuses.CONFLICT
             del requests_by_key[external_user_key]
     return results
