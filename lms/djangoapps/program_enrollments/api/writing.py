@@ -19,7 +19,6 @@ from ..constants import ProgramOperationStatuses as ProgramOpStatuses
 from ..exceptions import ProviderDoesNotExistException
 from ..models import ProgramCourseEnrollment, ProgramEnrollment
 from .reading import (
-    fetch_program_course_enrollments,
     fetch_program_course_enrollments_by_students,
     fetch_program_enrollments,
     get_users_by_external_keys

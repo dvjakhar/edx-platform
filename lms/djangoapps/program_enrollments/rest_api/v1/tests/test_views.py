@@ -1205,6 +1205,7 @@ class ProgramCourseEnrollmentsPatchTests(ProgramCourseEnrollmentsModifyMixin, AP
 
 @ddt.ddt
 class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
+    """ Tests for the Multiple Program with same course scenario """
     @classmethod
     def setUpClass(cls):
         super(MultiprogramEnrollmentsTest, cls).setUpClass()
@@ -1238,9 +1239,17 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
             'course_id': course_id
         })
 
-    def write_program_enrollment(self, method, program_uuid, curriculum_uuid, status, existing_user):
+    def write_program_enrollment(
+        self,
+        method,
+        program_uuid,
+        curriculum_uuid,
+        enrollment_status,
+        existing_user
+    ):
+        """ Create or update the program enrollment through API """
         write_data = [{
-            'status': status,
+            'status': enrollment_status,
             REQUEST_STUDENT_KEY: self.external_user_key,
             'curriculum_uuid': str(curriculum_uuid)
         }]
@@ -1253,19 +1262,35 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
             autospec=True,
             return_value=mock_user,
         ):
-            response = getattr(self.client, method)(url, json.dumps(write_data), content_type='application/json')
+            response = getattr(self.client, method)(
+                url,
+                json.dumps(write_data),
+                content_type='application/json'
+            )
             return response
 
-    def write_program_course_enrollment(self, method, program_uuid, course_id, status):
+    def write_program_course_enrollment(
+        self,
+        method, 
+        program_uuid,
+        course_id, 
+        enrollment_status
+    ):
+        """ Create or update the program course enrollment through API """
         course_post_data = [{
             'student_key': self.external_user_key,
-            'status': status
+            'status': enrollment_status
         }]
         course_url = self.get_program_course_url(program_uuid, course_id)
-        response = getattr(self.client, method)(course_url, json.dumps(course_post_data), content_type='application/json')
+        response = getattr(self.client, method)(
+            course_url,
+            json.dumps(course_post_data),
+            content_type='application/json'
+        )
         return response
 
     def link_user_social_auth(self):
+        """ Create the UserSocialAuth record to trigger the linkage django signal """
         SAMLProviderConfigFactory(
             organization=self.lms_org,
             slug=self.organization_key
@@ -1278,19 +1303,30 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
 
     @ddt.data(True, False)
     def test_enrollment_in_same_course_multi_program(self, existing_user):
-        response = self.write_program_enrollment('post', self.program_uuid, self.curriculum_uuid, 'enrolled', existing_user)
+        response = self.write_program_enrollment(
+            'post', self.program_uuid, self.curriculum_uuid, 'enrolled', existing_user
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        response = self.write_program_course_enrollment('post', self.program_uuid, self.course_id, 'active')
+        response = self.write_program_course_enrollment(
+            'post', self.program_uuid, self.course_id, 'active'
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        response = self.write_program_enrollment('put', self.program_uuid, self.curriculum_uuid, 'canceled', existing_user)
+        response = self.write_program_enrollment(
+            'put', self.program_uuid, self.curriculum_uuid, 'canceled', existing_user
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        response = self.write_program_course_enrollment('put', self.program_uuid, self.course_id, 'inactive')
+        response = self.write_program_course_enrollment(
+            'put', self.program_uuid, self.course_id, 'inactive'
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        response = self.write_program_enrollment('post', self.another_program_uuid, self.another_curriculum_uuid, 'enrolled', existing_user)
+        response = self.write_program_enrollment(
+            'post', self.another_program_uuid, self.another_curriculum_uuid, 'enrolled', existing_user
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        response = self.write_program_course_enrollment('post', self.another_program_uuid, self.course_id, 'active')
+        response = self.write_program_course_enrollment(
+            'post', self.another_program_uuid, self.course_id, 'active')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         if not existing_user:
@@ -1304,14 +1340,22 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
     @ddt.data(True, False)
     @mock.patch('lms.djangoapps.program_enrollments.api.writing.logger')
     def test_enrollment_in_same_course_both_program_enrollments_active(self, existing_user, mock_log):
-        response = self.write_program_enrollment('post', self.program_uuid, self.curriculum_uuid, 'enrolled', existing_user)
+        response = self.write_program_enrollment(
+            'post', self.program_uuid, self.curriculum_uuid, 'enrolled', existing_user
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        response = self.write_program_course_enrollment('post', self.program_uuid, self.course_id, 'active')
+        response = self.write_program_course_enrollment(
+            'post', self.program_uuid, self.course_id, 'active'
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        response = self.write_program_enrollment('post', self.another_program_uuid, self.another_curriculum_uuid, 'enrolled', existing_user)
+        response = self.write_program_enrollment(
+            'post', self.another_program_uuid, self.another_curriculum_uuid, 'enrolled', existing_user
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        response = self.write_program_course_enrollment('post', self.another_program_uuid, self.course_id, 'active')
+        response = self.write_program_course_enrollment(
+            'post', self.another_program_uuid, self.course_id, 'active'
+        )
         self.assertEqual(response.status_code, 422)
         mock_log.error.assert_called_with(
             u'Detected duplicated active ProgramCourseEnrollment. This is happening on'
