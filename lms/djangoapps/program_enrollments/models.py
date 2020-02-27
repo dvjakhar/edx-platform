@@ -107,6 +107,8 @@ class ProgramCourseEnrollment(TimeStampedModel):  # pylint: disable=model-missin
         on_delete=models.CASCADE,
         related_name="program_course_enrollments"
     )
+    # In Django 2.x, we should add a conditional unique constraint to this field so
+    # no duplicated tuple of (course_enrollment_id, status=active) exists
     course_enrollment = models.ForeignKey(
         CourseEnrollment,
         null=True,

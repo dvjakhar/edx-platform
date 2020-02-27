@@ -18,7 +18,7 @@ from .grades import iter_program_course_grades
 from .linking import link_program_enrollment_to_lms_user, link_program_enrollments
 from .reading import (
     fetch_program_course_enrollments,
-    fetch_program_course_enrollments_by_student,
+    fetch_program_course_enrollments_by_students,
     fetch_program_enrollments,
     fetch_program_enrollments_by_student,
     get_program_course_enrollment,

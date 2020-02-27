@@ -18,7 +18,12 @@ from ..constants import ProgramEnrollmentStatuses
 from ..constants import ProgramOperationStatuses as ProgramOpStatuses
 from ..exceptions import ProviderDoesNotExistException
 from ..models import ProgramCourseEnrollment, ProgramEnrollment
-from .reading import fetch_program_course_enrollments, fetch_program_enrollments, get_users_by_external_keys
+from .reading import (
+    fetch_program_course_enrollments,
+    fetch_program_course_enrollments_by_students,
+    fetch_program_enrollments,
+    get_users_by_external_keys
+)
 
 logger = logging.getLogger(__name__)
 
@@ -202,21 +207,34 @@ def write_program_course_enrollments(
         enrollment.external_user_key: enrollment for enrollment in program_enrollments
     }
 
-    # Fetch existing program-course enrollments.
-    existing_course_enrollments = fetch_program_course_enrollments(
-        program_uuid, course_key, program_enrollments=program_enrollments,
+    # Fetch enrollments regardless of anchored Program Enrollments
+    existing_course_enrollments = fetch_program_course_enrollments_by_students(
+        external_user_keys=external_keys,
+        course_keys=[course_key],
+    ).select_related('program_enrollment')
+
+    results = _process_duplicated_course_enrollments(
+        requests_by_key,
+        existing_course_enrollments,
+        program_uuid,
+        course_key
     )
+
+    # Now, limit the course enrollments to the same program uuid
+    existing_course_enrollments_of_program_enrollment = existing_course_enrollments.filter(
+        program_enrollment__program_uuid=program_uuid
+    )
+  
     existing_course_enrollments_by_key = {key: None for key in external_keys}
     existing_course_enrollments_by_key.update({
         enrollment.program_enrollment.external_user_key: enrollment
-        for enrollment in existing_course_enrollments
+        for enrollment in existing_course_enrollments_of_program_enrollment
     })
 
     # For each enrollment request, try to create/update.
     # For creates, build up list `to_save`, which we will bulk-create afterwards.
     # For updates, do them in place (Django 2.2 will add bulk-update support).
     # For each operation, update `results` with the new status or an error status.
-    results = {}
     to_save = []
     for external_key, request in requests_by_key.items():
         status = request['status']
@@ -424,3 +442,51 @@ def _organize_requests_by_external_key(enrollment_requests):
             continue
         requests_by_key[key] = request
     return requests_by_key, duplicated_keys
+
+
+def _process_duplicated_course_enrollments(
+    requests_by_key,
+    existing_course_enrollments,
+    program_uuid,
+    course_key
+):
+    """
+    Process the list of existing course enrollments together with
+    the enrollment request list stored in 'requests_by_key'. Detect
+    whether we have duplicated active ProgramCourseEnrollment entries.
+    When detected, log about it and set that update or create entry to
+    have duplicated status.
+
+    Arguments:
+        requests_by_key (dict)
+        existing_course_enrollments (queryset),
+        program_uuid (UUID|str),
+        course_key (str)
+
+    Returns:
+        results (dict) with detected duplicated entry, or empty dict.
+    """
+    results = {}
+    # At this point, we want to detect potential duplication of program course enrollments
+    course_enrollment_statuses_by_user_key = {
+        key: request.get('status') for key, request in requests_by_key.items()
+    }
+    for course_enrollment in existing_course_enrollments:
+        external_user_key = course_enrollment.program_enrollment.external_user_key
+        enrollment_status = course_enrollment_statuses_by_user_key.get(
+            course_enrollment.program_enrollment.external_user_key
+        )
+        if enrollment_status and \
+            enrollment_status == ProgramCourseEnrollmentStatuses.ACTIVE and \
+            course_enrollment.status == ProgramCourseEnrollmentStatuses.ACTIVE and \
+            course_enrollment.program_enrollment.program_uuid != program_uuid:
+            logger.error(
+                u'Detected duplicated active ProgramCourseEnrollment. This is happening on'
+                u' The program_uuid [{}] with course_key [{}] for external_user_key [{}]'.format(
+                    program_uuid,
+                    course_key,
+                    external_user_key
+                ))
+            results[external_user_key] = ProgramCourseOpStatuses.DUPLICATED
+            del requests_by_key[external_user_key]
+    return results

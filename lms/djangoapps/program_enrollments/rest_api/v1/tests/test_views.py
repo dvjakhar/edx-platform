@@ -10,11 +10,9 @@ from uuid import UUID, uuid4
 
 import ddt
 import mock
-import pytest
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.cache import cache
-from django.db import IntegrityError
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -1305,7 +1303,8 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
 
 
     @ddt.data(True, False)
-    def test_enrollment_in_same_course_both_program_enrollments_active(self, existing_user):
+    @mock.patch('lms.djangoapps.program_enrollments.api.writing.logger')
+    def test_enrollment_in_same_course_both_program_enrollments_active(self, existing_user, mock_log):
         response = self.write_program_enrollment('post', self.program_uuid, self.curriculum_uuid, 'enrolled', existing_user)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         response = self.write_program_course_enrollment('post', self.program_uuid, self.course_id, 'active')
@@ -1313,16 +1312,16 @@ class MultiprogramEnrollmentsTest(EnrollmentsDataMixin, APITestCase):
 
         response = self.write_program_enrollment('post', self.another_program_uuid, self.another_curriculum_uuid, 'enrolled', existing_user)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        if existing_user:
-            with pytest.raises(IntegrityError) as integrity_exception:
-                response = self.write_program_course_enrollment('post', self.another_program_uuid, self.course_id, 'active')
-            assert 'UNIQUE constraint failed' in str(integrity_exception.value)
-        else:
-            response = self.write_program_course_enrollment('post', self.another_program_uuid, self.course_id, 'active')
-            self.assertEqual(response.status_code, status.HTTP_200_OK)
-            with pytest.raises(IntegrityError) as integrity_exception:
-                self.link_user_social_auth()
-            assert 'UNIQUE constraint failed' in str(integrity_exception.value)
+        response = self.write_program_course_enrollment('post', self.another_program_uuid, self.course_id, 'active')
+        self.assertEqual(response.status_code, 422)
+        mock_log.error.assert_called_with(
+            u'Detected duplicated active ProgramCourseEnrollment. This is happening on'
+            u' The program_uuid [{}] with course_key [{}] for external_user_key [{}]'.format(
+                self.another_program_uuid,
+                self.course_id,
+                self.external_user_key
+            )
+        )
 
 class ProgramCourseEnrollmentsPutTests(ProgramCourseEnrollmentsModifyMixin, APITestCase):
     """ Tests for course enrollment PUT """

@@ -27,6 +27,9 @@ _STUDENT_ARG_ERROR_MESSAGE = (
 _REALIZED_FILTER_ERROR_TEMPLATE = (
     "{} and {} are mutually exclusive; at most one of them may be passed in as True."
 )
+_STUDENT_LIST_ARG_ERROR_MESSAGE = (
+    "user list and external_user_key_list are both empty or None; At list one of the list must be provided."
+)
 
 
 def get_program_enrollment(
@@ -265,9 +268,9 @@ def fetch_program_enrollments_by_student(
     return ProgramEnrollment.objects.filter(**_remove_none_values(filters))
 
 
-def fetch_program_course_enrollments_by_student(
-        user=None,
-        external_user_key=None,
+def fetch_program_course_enrollments_by_students(
+        users=None,
+        external_user_keys=None,
         program_uuids=None,
         curriculum_uuids=None,
         course_keys=None,
@@ -278,11 +281,11 @@ def fetch_program_course_enrollments_by_student(
         waiting_only=False,
 ):
     """
-    Fetch program-course enrollments for a specific student.
+    Fetch program-course enrollments for a specific list of students.
 
     Required arguments (at least one must be provided):
-        * user (User)
-        * external_user_key (str)
+        * users (iterable[User])
+        * external_user_keys (iterable[str])
 
     Optional arguments:
         * provided_uuids (iterable[UUID|str])
@@ -298,8 +301,8 @@ def fetch_program_course_enrollments_by_student(
 
     Returns: queryset[ProgramCourseEnrollment]
     """
-    if not (user or external_user_key):
-        raise ValueError(_STUDENT_ARG_ERROR_MESSAGE)
+    if not (users or external_user_keys):
+        raise ValueError(_STUDENT_LIST_ARG_ERROR_MESSAGE)
     if active_only and inactive_only:
         raise ValueError(
             _REALIZED_FILTER_ERROR_TEMPLATE.format("active_only", "inactive_only")
@@ -309,8 +312,8 @@ def fetch_program_course_enrollments_by_student(
             _REALIZED_FILTER_ERROR_TEMPLATE.format("realized_only", "waiting_only")
         )
     filters = {
-        "program_enrollment__user": user,
-        "program_enrollment__external_user_key": external_user_key,
+        "program_enrollment__user__in": users,
+        "program_enrollment__external_user_key__in": external_user_keys,
         "program_enrollment__program_uuid__in": program_uuids,
         "program_enrollment__curriculum_uuid__in": curriculum_uuids,
         "course_key__in": course_keys,

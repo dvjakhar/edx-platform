@@ -34,7 +34,7 @@ from third_party_auth.tests.factories import SAMLProviderConfigFactory
 
 from ..reading import (
     fetch_program_course_enrollments,
-    fetch_program_course_enrollments_by_student,
+    fetch_program_course_enrollments_by_students,
     fetch_program_enrollments,
     fetch_program_enrollments_by_student,
     get_program_course_enrollment,
@@ -375,7 +375,7 @@ class ProgramEnrollmentReadingTests(TestCase):
         # Course keys and active-only filters
         (
             {
-                'external_user_key': ext_4,
+                'external_user_keys': ext_4,
                 'course_keys': {course_key_p, course_key_q},
                 'active_only': True,
             },
@@ -411,9 +411,9 @@ class ProgramEnrollmentReadingTests(TestCase):
         ),
     )
     @ddt.unpack
-    def test_fetch_program_course_enrollments_by_student(self, kwargs, expected_enrollment_ids):
+    def test_fetch_program_course_enrollments_by_students(self, kwargs, expected_enrollment_ids):
         kwargs = self._username_to_user(kwargs)
-        actual_enrollments = fetch_program_course_enrollments_by_student(**kwargs)
+        actual_enrollments = fetch_program_course_enrollments_by_students(**kwargs)
         actual_enrollment_ids = {enrollment.id for enrollment in actual_enrollments}
         assert actual_enrollment_ids == expected_enrollment_ids
 
