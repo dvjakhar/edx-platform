@@ -453,7 +453,7 @@ def _process_duplicated_course_enrollments(
     """
     Process the list of existing course enrollments together with
     the enrollment request list stored in 'requests_by_key'. Detect
-    whether we have duplicated active ProgramCourseEnrollment entries.
+    whether we have duplicated ACTIVE ProgramCourseEnrollment entries.
     When detected, log about it and set that update or create entry to
     have duplicated status.
 
