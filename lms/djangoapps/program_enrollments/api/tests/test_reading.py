@@ -39,7 +39,8 @@ from ..reading import (
     fetch_program_enrollments_by_student,
     get_program_course_enrollment,
     get_program_enrollment,
-    get_users_by_external_keys
+    get_users_by_external_keys,
+    get_external_key_by_user_and_course
 )
 
 User = get_user_model()
@@ -442,6 +443,42 @@ class ProgramEnrollmentReadingTests(TestCase):
             )
             del result['usernames']
         return result
+
+    @ddt.data(
+        (
+            {'username': username_0, 'course_key': course_key_p},
+            None
+        ),
+        (
+            {'username': username_1, 'course_key': course_key_p},
+            None
+        ),
+        (
+            {'username': username_1, 'course_key': course_key_r},
+            None
+        ),
+        (
+            {'username': username_2, 'course_key': course_key_p},
+            None
+        ),
+        (
+            {'username': username_3, 'course_key': course_key_p},
+            ext_3
+        ),
+        (
+            {'username': username_3, 'course_key': course_key_r},
+            None
+        ),
+        (
+            {'username': username_4, 'course_key': course_key_p},
+            None
+        )
+    )
+    @ddt.unpack
+    def test_get_external_key_by_user_and_course(self, kwargs, expected_external_user_key):
+        kwarg = self._username_to_user(kwargs)
+        external_user_key = get_external_key_by_user_and_course(**kwarg)
+        assert expected_external_user_key == external_user_key
 
 
 class GetUsersByExternalKeysTests(CacheIsolationTestCase):

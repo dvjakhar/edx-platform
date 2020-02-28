@@ -26,7 +26,8 @@ from .reading import (
     get_provider_slug,
     get_saml_provider_for_organization,
     get_saml_provider_for_program,
-    get_users_by_external_keys
+    get_users_by_external_keys,
+    get_external_key_by_user_and_course
 )
 from .writing import (
     change_program_course_enrollment_status,

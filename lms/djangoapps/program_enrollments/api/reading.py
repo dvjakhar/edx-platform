@@ -12,6 +12,7 @@ from social_django.models import UserSocialAuth
 from openedx.core.djangoapps.catalog.utils import get_programs
 from third_party_auth.models import SAMLProviderConfig
 
+from ..constants import ProgramCourseEnrollmentStatuses
 from ..exceptions import (
     BadOrganizationShortNameException,
     ProgramDoesNotExistException,
@@ -379,6 +380,41 @@ def get_users_by_external_keys(program_uuid, external_user_keys):
     users_by_external_keys = {key: None for key in external_user_keys}
     users_by_external_keys.update(found_users_by_external_keys)
     return users_by_external_keys
+
+
+def get_external_key_by_user_and_course(user, course_key):
+    """
+    Returns the external_user_key of the edX account/user
+    enrolled into the course
+
+    Arguments:
+        user (User):
+            The edX account representing the user in auth_user table
+        course_key (CourseKey|str):
+            The course key of the course user is enrolled in
+
+    Returns: external_user_key (str|None)
+        The external user key provided by Masters degree provider
+        Or None if cannot find edX user to Masters learner mapping
+    """
+    program_course_enrollments = ProgramCourseEnrollment.objects.filter(
+        course_enrollment__user=user,
+        course_key=course_key
+    ).order_by('-modified')
+
+    if not program_course_enrollments:
+        return None
+
+    program_enrollment = None
+    for program_course_enrollment in program_course_enrollments:
+        program_enrollment = program_course_enrollment.program_enrollment
+        if program_course_enrollment.status == ProgramCourseEnrollmentStatuses.ACTIVE:
+            # If we found this is an active program course enrollment, then according
+            # to the query order, this would be the most recent active record. We 
+            # want to based on the external_user_key on this most recent active record
+            break
+
+    return getattr(program_enrollment, 'external_user_key', None)
 
 
 def get_saml_provider_for_program(program_uuid):
