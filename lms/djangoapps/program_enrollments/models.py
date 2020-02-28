@@ -109,6 +109,7 @@ class ProgramCourseEnrollment(TimeStampedModel):  # pylint: disable=model-missin
     )
     # In Django 2.x, we should add a conditional unique constraint to this field so
     # no duplicated tuple of (course_enrollment_id, status=active) exists
+    # MST-168 is the Jira ticket to accomplish this once Django is upgraded
     course_enrollment = models.ForeignKey(
         CourseEnrollment,
         null=True,
