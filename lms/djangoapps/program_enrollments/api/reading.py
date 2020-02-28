@@ -410,8 +410,8 @@ def get_external_key_by_user_and_course(user, course_key):
         program_enrollment = program_course_enrollment.program_enrollment
         if program_course_enrollment.status == ProgramCourseEnrollmentStatuses.ACTIVE:
             # If we found this is an active program course enrollment, then according
-            # to the query order, this would be the most recent active record. We 
-            # want to based on the external_user_key on this most recent active record
+            # to the query order, this would be the most recent active record. we want
+            # to based on the external_user_key on this most recent active record
             break
 
     return getattr(program_enrollment, 'external_user_key', None)

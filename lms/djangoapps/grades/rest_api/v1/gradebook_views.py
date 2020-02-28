@@ -505,7 +505,6 @@ class GradebookView(GradeViewMixin, PaginatedAPIView):
 
         return user_entry
 
-
     @verify_course_exists
     @verify_writable_gradebook_enabled
     @course_author_access_required
