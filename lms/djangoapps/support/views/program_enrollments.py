@@ -98,3 +98,25 @@ class LinkProgramEnrollmentSupportView(View):
         ]
         errors = [message for message in link_errors.values()]
         return successes, errors
+
+
+
+class ProgramEnrollmentsConsoleView(View):
+    """
+    The view to search and display the program enrollments
+    information of a learner.
+    """
+    exclude_from_schema = True
+    CONSOLE_TEMPLATE_PATH = 'support/program_enrollments_console.html'
+
+    @method_decorator(require_support_permission)
+    def get(self, request):
+        return render_to_response(
+            self.CONSOLE_TEMPLATE_PATH,
+            {
+                'successes': [],
+                'errors': [],
+                'user_id': '',
+                'text': '',
+            }
+        )
